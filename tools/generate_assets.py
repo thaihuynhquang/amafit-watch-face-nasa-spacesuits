@@ -77,12 +77,12 @@ POWER_ICON_W = 50
 STEP_ICON_W = 35
 
 # Default preview data from the Zepp OS watchface specification. Stat strings
-# use TEXT_IMG syntax: "." is the widget's dot_image (a comma for steps). The
-# device appends a TEXT_IMG's unit image (% for battery) by itself.
+# use TEXT_IMG syntax: "." is the widget's dot_image. The device appends a
+# TEXT_IMG's unit image (% for battery) by itself.
 PREVIEW_HOUR = "10"
 PREVIEW_MINUTE = "09"
 PREVIEW_HEART = "86"
-PREVIEW_STEPS = "8.670"
+PREVIEW_STEPS = "8670"
 PREVIEW_POWER = "75"
 PREVIEW_DISTANCE = "5.30"
 
@@ -93,7 +93,7 @@ AOD_WORST_HOUR = "20"
 AOD_WORST_MINUTE = "08"
 AOD_WORST_AMPM = "pm"
 AOD_WORST_DATE = "WED, SEP 28"
-AOD_WORST_STEPS = "88.888"
+AOD_WORST_STEPS = "88888"
 
 
 def font(filename, size):
@@ -271,13 +271,13 @@ def ampm_images():
 
 def stat_glyphs():
     return glyph_set(TEXT_FONT, STAT_TEXT_SIZE,
-                     {"dot": ".", "comma": ",", "percent": "%", "negative": "-"})
+                     {"dot": ".", "percent": "%", "invalid": "--"})
 
 
-def draw_text_img(dst, images, x, y, text, dot="dot", unit=None):
+def draw_text_img(dst, images, x, y, text, unit=None):
     """Composite a left-aligned TEXT_IMG value, as the device draws it: the
     unit image, if any, is appended after the text."""
-    names = [{".": dot, "-": "negative"}.get(c, c) for c in text]
+    names = ["dot" if c == "." else c for c in text]
     if unit:
         names.append(unit)
     for name in names:
@@ -319,32 +319,38 @@ def lit_ratio(im):
     return (lit & on_screen).sum() / on_screen.sum()
 
 
-def save_all(images, name_fmt):
+def save(im, path):
+    """Save under assets/<target>/images/, the folder layout the Zepp OS
+    watchface samples use."""
+    full = os.path.join(ASSET_DIR, "images", path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    im.save(full)
+
+
+def save_all(images, folder):
     for name, im in images.items():
-        im.save(os.path.join(ASSET_DIR, name_fmt.format(name)))
+        save(im, f"{folder}/{name}.png")
 
 
 def main():
     bg = build_background()
-    bg.convert("RGB").save(os.path.join(ASSET_DIR, "bg.png"))
+    save(bg.convert("RGB"), "bg.png")
 
     power, power_charging = power_icons()
-    power.save(os.path.join(ASSET_DIR, "power.png"))
-    power_charging.save(os.path.join(ASSET_DIR, "power_charging.png"))
+    save(power, "icons/power.png")
+    save(power_charging, "icons/power_charging.png")
     power_pos = centered_position(power, ICON_CENTER_X_LEFT, STAT_ROW_Y_BOTTOM)
 
     step = step_icon()
-    step.save(os.path.join(ASSET_DIR, "step.png"))
+    save(step, "icons/step.png")
     step_pos = centered_position(step, ICON_CENTER_X_RIGHT, STAT_ROW_Y_TOP)
 
     time_images, time_center = time_glyphs()
-    save_all({k: v for k, v in time_images.items() if k != "colon"}, "time_{}.png")
-    time_images["colon"].save(os.path.join(ASSET_DIR, "colon.png"))
+    save_all(time_images, "time")
     ampm, ampm_center = ampm_images()
-    save_all(ampm, "{}_en.png")
+    save_all(ampm, "time")
     stat_images, stat_center = stat_glyphs()
-    save_all({k: v for k, v in stat_images.items() if k.isdigit()}, "font_stat_{}.png")
-    save_all({k: v for k, v in stat_images.items() if not k.isdigit()}, "{}.png")
+    save_all(stat_images, "stat")
 
     stat_y_top = round(STAT_ROW_Y_TOP - stat_center)
     stat_y_bottom = round(STAT_ROW_Y_BOTTOM - stat_center)
@@ -364,7 +370,7 @@ def main():
     draw_time(preview, time_images, time_center, PREVIEW_HOUR, PREVIEW_MINUTE, "am", ampm, ampm_center)
     draw_date(preview, "FRI, SEP 24")
     draw_text_img(preview, stat_images, STAT_TEXT_X_LEFT, stat_y_top, PREVIEW_HEART)
-    draw_text_img(preview, stat_images, STAT_TEXT_X_RIGHT, stat_y_top, PREVIEW_STEPS, dot="comma")
+    draw_text_img(preview, stat_images, STAT_TEXT_X_RIGHT, stat_y_top, PREVIEW_STEPS)
     draw_text_img(preview, stat_images, STAT_TEXT_X_LEFT, stat_y_bottom, PREVIEW_POWER, unit="percent")
     draw_text_img(preview, stat_images, STAT_TEXT_X_RIGHT, stat_y_bottom, PREVIEW_DISTANCE)
     preview.save(os.path.join(ROOT, "tools", "_preview_full.png"))
@@ -376,7 +382,7 @@ def main():
         im.alpha_composite(step, step_pos)
         draw_time(im, time_images, time_center, hour, minute, ampm_name, ampm, ampm_center)
         draw_date(im, date)
-        draw_text_img(im, stat_images, STAT_TEXT_X_RIGHT, stat_y_top, steps, dot="comma")
+        draw_text_img(im, stat_images, STAT_TEXT_X_RIGHT, stat_y_top, steps)
         return im
 
     render_aod(PREVIEW_HOUR, PREVIEW_MINUTE, "am", "FRI, SEP 24", PREVIEW_STEPS).save(

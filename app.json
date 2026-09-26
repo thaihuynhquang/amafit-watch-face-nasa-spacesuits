@@ -12,11 +12,7 @@
     "description": "NASA Artemis Orion watchface",
     "icon": "icon.png"
   },
-  "permissions": [
-    "data:user.hd.step",
-    "data:user.hd.distance",
-    "data:user.hd.heart_rate"
-  ],
+  "permissions": [],
   "runtime": {
     "apiVersion": {
       "compatible": "2.0.0",
