@@ -6,7 +6,7 @@ A Zepp OS watchface for the Amazfit Cheetah Pro (480x480, round), themed after N
 
 ## Features
 
-- Time in 12h (with AM/PM) or 24h, following the watch setting
+- Time in 12h (with AM/PM) or 24h, following the watch setting, with a zero-padded hour
 - Date as `FRI, SEP 24`, or `T6, 24/09` when the watch language is Vietnamese
 - Heart rate, steps, battery percentage and distance
 - Distance in km or miles, following the watch's unit setting, capped at 4 digits (`5.30`, `12.3`)
@@ -48,6 +48,7 @@ zeus build                # build the .zab package into dist/
 - **Layout** is measured from `design/watch-face-circle.png`. The layout constants in `tools/generate_assets.py` and `watchface/index.js` must stay in sync.
 - **Icon extraction:** the PNGs in `design/` have a checkerboard painted in rather than real transparency. `generate_assets.py` keys single-color icons out by saturation. It keys the Artemis logo and the shoe out of the mockup against the navy dial.
 - **Charging state:** Zepp OS does not expose a charging status to watchfaces. The charging icon is shown when the battery percentage rises and hidden when it falls. It appears only after the first 1% increase, and stays after unplugging at 100% until the percentage drops.
+- **Digit images, not fonts:** on the Cheetah Pro, large custom-font `TEXT` widgets rendered only partially or not at all. So time (`IMG_TIME`) and stat numbers (`TEXT_IMG`) use pre-rendered digit images, generated from Montserrat and Roboto by `generate_assets.py`. Only the date is a `TEXT` widget, because it needs letters.
 - **Zepp OS specification:** the watchface follows the [watchface specification](https://docs.zepp.com/docs/watchface/specification) and the [AOD design principles](https://docs.zepp.com/docs/designs/customization/screen-off-mode/#design-principles):
   - AOD uses a pure black background. It shows only the top-priority fields (time, date, steps), at the same positions as normal mode.
   - `generate_assets.py` fails if worst-case AOD content lights more than 10% of the screen.

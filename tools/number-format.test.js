@@ -25,3 +25,7 @@ test('groups thousands with commas', () => {
   assert.equal(formatThousands(8670), '8,670')
   assert.equal(formatThousands(99999), '99,999')
 })
+
+test('uses a custom thousands separator', () => {
+  assert.equal(formatThousands(8670, '.'), '8.670')
+})

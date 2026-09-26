@@ -14,7 +14,13 @@ transparency, so icons are keyed out here:
   - the Artemis logo and the shoe are keyed out of the mockup against the
     navy dial, because their files are white-on-white (Artemis) or styled
     differently from the mockup (shoe).
+
+Time and stat numbers ship as pre-rendered digit images (IMG_TIME / TEXT_IMG
+widgets), not TEXT with a custom font: on the Cheetah Pro, large or several
+custom-font TEXT widgets failed to render. The date stays a TEXT widget -- it
+needs letters and rendered correctly on the device.
 """
+import math
 import os
 
 import numpy as np
@@ -70,20 +76,24 @@ ICON_CENTER_X_RIGHT = 282
 POWER_ICON_W = 50
 STEP_ICON_W = 35
 
-# Default preview data from the Zepp OS watchface specification.
-PREVIEW_TIME = "10:09"
+# Default preview data from the Zepp OS watchface specification. Stat strings
+# use TEXT_IMG syntax: "." is the widget's dot_image (a comma for steps). The
+# device appends a TEXT_IMG's unit image (% for battery) by itself.
+PREVIEW_HOUR = "10"
+PREVIEW_MINUTE = "09"
 PREVIEW_HEART = "86"
-PREVIEW_STEPS = "8,670"
-PREVIEW_POWER = "75%"
+PREVIEW_STEPS = "8.670"
+PREVIEW_POWER = "75"
 PREVIEW_DISTANCE = "5.30"
 
 # AOD rule from the specification: lit pixels must stay under 10% of the
 # screen. Checked with the widest, most-ink values each AOD field can show.
 AOD_MAX_LIT_RATIO = 0.10
-AOD_WORST_TIME = "20:08"
-AOD_WORST_AMPM = "PM"
+AOD_WORST_HOUR = "20"
+AOD_WORST_MINUTE = "08"
+AOD_WORST_AMPM = "pm"
 AOD_WORST_DATE = "WED, SEP 28"
-AOD_WORST_STEPS = "88,888"
+AOD_WORST_STEPS = "88.888"
 
 
 def font(filename, size):
@@ -212,48 +222,92 @@ def centered_position(icon, cx, cy):
     return (round(cx - icon.width / 2), round(cy - icon.height / 2))
 
 
-def draw_time_and_date(d, time, ampm, date):
-    d.text((TIME_RIGHT_X, TIME_CENTER_Y), time, font=font(TIME_FONT, TIME_TEXT_SIZE),
-           fill=WHITE, anchor="rm")
-    d.text((AMPM_X, AMPM_CENTER_Y), ampm, font=font(TIME_FONT, AMPM_TEXT_SIZE),
-           fill=WHITE, anchor="lm")
-    d.text((CX, DATE_CENTER_Y), date, font=font(TEXT_FONT, DATE_TEXT_SIZE),
-           fill=WHITE, anchor="mm")
+def glyph_set(font_file, size, extra):
+    """White digit images 0-9 plus `extra` ({name: char}), for IMG_TIME /
+    TEXT_IMG. Digits share one cell width (tabular) so values don't jitter,
+    and every image shares one height and baseline so they line up in a row.
+    Returns ({name: image}, offset from image top to the digits' vertical
+    center)."""
+    f = font(font_file, size)
+    chars = {str(d): str(d) for d in range(10)}
+    chars.update(extra)
+    digit_w = math.ceil(max(f.getlength(str(d)) for d in range(10)))
+    top = min(f.getbbox(c, anchor="ls")[1] for c in chars.values())
+    bottom = max(f.getbbox(c, anchor="ls")[3] for c in chars.values())
+    pad = 1
+    height = bottom - top + 2 * pad
+    baseline = pad - top
+
+    images = {}
+    for name, c in chars.items():
+        advance = f.getlength(c)
+        w = digit_w if c.isdigit() else math.ceil(advance)
+        im = Image.new("RGBA", (w, height), (0, 0, 0, 0))
+        ImageDraw.Draw(im).text(((w - advance) / 2, baseline), c, font=f, fill=WHITE, anchor="ls")
+        images[name] = im
+
+    digit_top = f.getbbox("0", anchor="ls")[1]
+    return images, baseline + digit_top / 2
 
 
-def draw_stats(d, stats):
-    f_stat = font(TEXT_FONT, STAT_TEXT_SIZE)
-    for x, y, text in stats:
-        d.text((x, y), text, font=f_stat, fill=WHITE, anchor="lm")
+def time_glyphs():
+    return glyph_set(TIME_FONT, TIME_TEXT_SIZE, {"colon": ":"})
 
 
-def render_preview(bg, icons):
-    """Normal-mode sample frame with the spec's default data, for icon.png /
-    preview.png. Text anchors mirror the device widgets' align settings."""
-    im = bg.copy()
-    for icon, pos in icons:
-        im.alpha_composite(icon, pos)
-    d = ImageDraw.Draw(im)
-    draw_time_and_date(d, PREVIEW_TIME, "AM", "FRI, SEP 24")
-    draw_stats(d, [
-        (STAT_TEXT_X_LEFT, STAT_ROW_Y_TOP, PREVIEW_HEART),
-        (STAT_TEXT_X_RIGHT, STAT_ROW_Y_TOP, PREVIEW_STEPS),
-        (STAT_TEXT_X_LEFT, STAT_ROW_Y_BOTTOM, PREVIEW_POWER),
-        (STAT_TEXT_X_RIGHT, STAT_ROW_Y_BOTTOM, PREVIEW_DISTANCE),
-    ])
-    return im
+def ampm_images():
+    """am_en.png / pm_en.png on one shared canvas, plus the offset from image
+    top to the letters' vertical center."""
+    f = font(TIME_FONT, AMPM_TEXT_SIZE)
+    top, bottom = f.getbbox("AMP", anchor="ls")[1], f.getbbox("AMP", anchor="ls")[3]
+    w = math.ceil(max(f.getlength("AM"), f.getlength("PM"))) + 2
+    h = bottom - top + 2
+    out = {}
+    for name, text in [("am", "AM"), ("pm", "PM")]:
+        im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        ImageDraw.Draw(im).text((1, 1 - top), text, font=f, fill=WHITE, anchor="ls")
+        out[name] = im
+    return out, h / 2
 
 
-def render_aod(step, step_pos, time, ampm, date, steps):
-    """AOD (screen-off) frame: black background with time, date and steps --
-    the spec's top-priority fields -- at the same positions as normal mode so
-    nothing jumps on switch."""
-    im = Image.new("RGBA", (W, H), (0, 0, 0, 255))
-    im.alpha_composite(step, step_pos)
-    d = ImageDraw.Draw(im)
-    draw_time_and_date(d, time, ampm, date)
-    draw_stats(d, [(STAT_TEXT_X_RIGHT, STAT_ROW_Y_TOP, steps)])
-    return im
+def stat_glyphs():
+    return glyph_set(TEXT_FONT, STAT_TEXT_SIZE,
+                     {"dot": ".", "comma": ",", "percent": "%", "negative": "-"})
+
+
+def draw_text_img(dst, images, x, y, text, dot="dot", unit=None):
+    """Composite a left-aligned TEXT_IMG value, as the device draws it: the
+    unit image, if any, is appended after the text."""
+    names = [{".": dot, "-": "negative"}.get(c, c) for c in text]
+    if unit:
+        names.append(unit)
+    for name in names:
+        dst.alpha_composite(images[name], (x, y))
+        x += images[name].width
+
+
+def time_x(time_images, is_12h):
+    """Hour x of the IMG_TIME widget. Tabular digits and a zero-padded hour
+    keep HH:MM a constant width: in 12h it is right-aligned at TIME_RIGHT_X to
+    leave room for AM/PM, in 24h it is centered on the dial."""
+    width = 4 * time_images["0"].width + time_images["colon"].width
+    return TIME_RIGHT_X - width if is_12h else round(CX - width / 2)
+
+
+def draw_time(dst, time_images, time_center, hour, minute, ampm, ampm_images_, ampm_center):
+    """`ampm` is "am" / "pm" for the 12h layout, None for 24h."""
+    x = time_x(time_images, ampm is not None)
+    y = round(TIME_CENTER_Y - time_center)
+    for c in hour + ":" + minute:
+        im = time_images["colon" if c == ":" else c]
+        dst.alpha_composite(im, (x, y))
+        x += im.width
+    if ampm:
+        dst.alpha_composite(ampm_images_[ampm], (AMPM_X, round(AMPM_CENTER_Y - ampm_center)))
+
+
+def draw_date(dst, date):
+    ImageDraw.Draw(dst).text((CX, DATE_CENTER_Y), date, font=font(TEXT_FONT, DATE_TEXT_SIZE),
+                             fill=WHITE, anchor="mm")
 
 
 def lit_ratio(im):
@@ -265,6 +319,11 @@ def lit_ratio(im):
     return (lit & on_screen).sum() / on_screen.sum()
 
 
+def save_all(images, name_fmt):
+    for name, im in images.items():
+        im.save(os.path.join(ASSET_DIR, name_fmt.format(name)))
+
+
 def main():
     bg = build_background()
     bg.convert("RGB").save(os.path.join(ASSET_DIR, "bg.png"))
@@ -273,20 +332,58 @@ def main():
     power.save(os.path.join(ASSET_DIR, "power.png"))
     power_charging.save(os.path.join(ASSET_DIR, "power_charging.png"))
     power_pos = centered_position(power, ICON_CENTER_X_LEFT, STAT_ROW_Y_BOTTOM)
-    print("power device pos/size", power_pos, power.size)
 
     step = step_icon()
     step.save(os.path.join(ASSET_DIR, "step.png"))
     step_pos = centered_position(step, ICON_CENTER_X_RIGHT, STAT_ROW_Y_TOP)
-    print("step device pos/size", step_pos, step.size)
 
-    preview = render_preview(bg, [(power, power_pos), (step, step_pos)])
+    time_images, time_center = time_glyphs()
+    save_all({k: v for k, v in time_images.items() if k != "colon"}, "time_{}.png")
+    time_images["colon"].save(os.path.join(ASSET_DIR, "colon.png"))
+    ampm, ampm_center = ampm_images()
+    save_all(ampm, "{}_en.png")
+    stat_images, stat_center = stat_glyphs()
+    save_all({k: v for k, v in stat_images.items() if k.isdigit()}, "font_stat_{}.png")
+    save_all({k: v for k, v in stat_images.items() if not k.isdigit()}, "{}.png")
+
+    stat_y_top = round(STAT_ROW_Y_TOP - stat_center)
+    stat_y_bottom = round(STAT_ROW_Y_BOTTOM - stat_center)
+    print("watchface/index.js constants:")
+    print(f"  POWER_X={power_pos[0]} POWER_Y={power_pos[1]} STEP_X={step_pos[0]} STEP_Y={step_pos[1]}")
+    minute_offset = 2 * time_images["0"].width + time_images["colon"].width
+    print(f"  TIME_X_12H={time_x(time_images, True)} TIME_X_24H={time_x(time_images, False)} "
+          f"MINUTE_OFFSET={minute_offset} TIME_Y={round(TIME_CENTER_Y - time_center)} "
+          f"AMPM_Y={round(AMPM_CENTER_Y - ampm_center)}")
+    print(f"  STAT_Y_TOP={stat_y_top} STAT_Y_BOTTOM={stat_y_bottom} "
+          f"STAT_H={stat_images['0'].height}")
+
+    # Normal-mode preview with the spec's default data, for icon.png / preview.png.
+    preview = bg.copy()
+    for icon, pos in [(power, power_pos), (step, step_pos)]:
+        preview.alpha_composite(icon, pos)
+    draw_time(preview, time_images, time_center, PREVIEW_HOUR, PREVIEW_MINUTE, "am", ampm, ampm_center)
+    draw_date(preview, "FRI, SEP 24")
+    draw_text_img(preview, stat_images, STAT_TEXT_X_LEFT, stat_y_top, PREVIEW_HEART)
+    draw_text_img(preview, stat_images, STAT_TEXT_X_RIGHT, stat_y_top, PREVIEW_STEPS, dot="comma")
+    draw_text_img(preview, stat_images, STAT_TEXT_X_LEFT, stat_y_bottom, PREVIEW_POWER, unit="percent")
+    draw_text_img(preview, stat_images, STAT_TEXT_X_RIGHT, stat_y_bottom, PREVIEW_DISTANCE)
     preview.save(os.path.join(ROOT, "tools", "_preview_full.png"))
 
-    aod = render_aod(step, step_pos, PREVIEW_TIME, "AM", "FRI, SEP 24", PREVIEW_STEPS)
-    aod.save(os.path.join(ROOT, "tools", "_preview_aod.png"))
-    ratio = lit_ratio(render_aod(step, step_pos, AOD_WORST_TIME, AOD_WORST_AMPM,
-                                 AOD_WORST_DATE, AOD_WORST_STEPS))
+    # AOD (screen-off): black background with time, date and steps -- the
+    # spec's top-priority fields -- at the same positions as normal mode.
+    def render_aod(hour, minute, ampm_name, date, steps):
+        im = Image.new("RGBA", (W, H), (0, 0, 0, 255))
+        im.alpha_composite(step, step_pos)
+        draw_time(im, time_images, time_center, hour, minute, ampm_name, ampm, ampm_center)
+        draw_date(im, date)
+        draw_text_img(im, stat_images, STAT_TEXT_X_RIGHT, stat_y_top, steps, dot="comma")
+        return im
+
+    render_aod(PREVIEW_HOUR, PREVIEW_MINUTE, "am", "FRI, SEP 24", PREVIEW_STEPS).save(
+        os.path.join(ROOT, "tools", "_preview_aod.png"))
+    ratio = max(lit_ratio(render_aod(AOD_WORST_HOUR, AOD_WORST_MINUTE, ampm_name,
+                                     AOD_WORST_DATE, AOD_WORST_STEPS))
+                for ampm_name in [AOD_WORST_AMPM, None])
     print(f"AOD lit pixels, worst case: {ratio:.1%} (limit {AOD_MAX_LIT_RATIO:.0%})")
     if ratio > AOD_MAX_LIT_RATIO:
         raise SystemExit("AOD layout lights too many pixels -- trim AOD elements")

@@ -10,6 +10,6 @@ export function formatDistance(value) {
   return value.toFixed(0)
 }
 
-export function formatThousands(n) {
-  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+export function formatThousands(n, separator = ',') {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, separator)
 }
