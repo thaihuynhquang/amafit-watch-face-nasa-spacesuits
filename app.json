@@ -1,0 +1,56 @@
+{
+  "configVersion": "v2",
+  "app": {
+    "appId": 10013,
+    "appName": "NASA Artemis",
+    "appType": "watchface",
+    "version": {
+      "code": 1,
+      "name": "1.0"
+    },
+    "vender": "zepp",
+    "description": "NASA Artemis Orion watchface",
+    "icon": "icon.png"
+  },
+  "permissions": [],
+  "runtime": {
+    "apiVersion": {
+      "compatible": "2.0.0",
+      "target": "3.5.0",
+      "minVersion": "2.0.0"
+    }
+  },
+  "targets": {
+    "480x480-amazfit-cheetah-pro": {
+      "module": {
+        "watchface": {
+          "path": "watchface/index",
+          "main": 1,
+          "editable": 0,
+          "lockscreen": 1
+        }
+      },
+      "platforms": [
+        {
+          "name": "Cheetah",
+          "deviceSource": 8126720
+        },
+        {
+          "name": "CheetahW",
+          "deviceSource": 8126721
+        }
+      ],
+      "designWidth": 480
+    }
+  },
+  "i18n": {
+    "en-US": {
+      "appName": "NASA Artemis"
+    },
+    "vi-VN": {
+      "appName": "NASA Artemis"
+    }
+  },
+  "defaultLanguage": "en-US",
+  "debug": false
+}
