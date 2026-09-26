@@ -64,8 +64,26 @@ STAT_ROW_Y_BOTTOM = 394
 ICON_CENTER_X_LEFT = 112
 ICON_CENTER_X_RIGHT = 282
 
-# Battery icons are runtime widgets (normal/charging swap), not baked in.
-BATTERY_ICON_W = 50
+# Runtime icon widgets rather than baked into bg.png: step also shows in AOD
+# (screen-off) mode, where bg.png is hidden, and power swaps between its
+# normal and charging image.
+POWER_ICON_W = 50
+STEP_ICON_W = 35
+
+# Default preview data from the Zepp OS watchface specification.
+PREVIEW_TIME = "10:09"
+PREVIEW_HEART = "86"
+PREVIEW_STEPS = "8,670"
+PREVIEW_POWER = "75%"
+PREVIEW_DISTANCE = "5.30"
+
+# AOD rule from the specification: lit pixels must stay under 10% of the
+# screen. Checked with the widest, most-ink values each AOD field can show.
+AOD_MAX_LIT_RATIO = 0.10
+AOD_WORST_TIME = "20:08"
+AOD_WORST_AMPM = "PM"
+AOD_WORST_DATE = "WED, SEP 28"
+AOD_WORST_STEPS = "88,888"
 
 
 def font(filename, size):
@@ -150,18 +168,23 @@ SHOE_BOX = (528, 685, 632, 770)
 
 # Union bbox of the body/bolt in both battery design files, so the normal and
 # charging icons share one canvas and swap in place.
-BATTERY_SRC_BOX = (202, 556, 567, 844)
+POWER_SRC_BOX = (202, 556, 567, 844)
 
 
-def battery_icons():
-    """battery.png / battery_charging.png on one shared canvas size."""
-    body_src_w = BATTERY_SRC_BOX[2] - BATTERY_SRC_BOX[0]
+def power_icons():
+    """power.png / power_charging.png on one shared canvas size."""
+    body_src_w = POWER_SRC_BOX[2] - POWER_SRC_BOX[0]
     normal = key_by_saturation(os.path.join(DESIGN_DIR, "battery-icon.png"),
-                               BATTERY_SRC_BOX, ICON_ORANGE)
+                               POWER_SRC_BOX, ICON_ORANGE)
     charging = key_by_saturation(os.path.join(DESIGN_DIR, "battery-charged-icon.png"),
-                                 BATTERY_SRC_BOX)
-    size = (BATTERY_ICON_W, round(normal.height * BATTERY_ICON_W / body_src_w))
+                                 POWER_SRC_BOX)
+    size = (POWER_ICON_W, round(normal.height * POWER_ICON_W / body_src_w))
     return resize_rgba(normal, size), resize_rgba(charging, size)
+
+
+def step_icon():
+    return scaled_to_width(key_by_saturation(os.path.join(DESIGN_DIR, "steps-icon.png"),
+                                             color=ICON_ORANGE), STEP_ICON_W)
 
 
 def build_background():
@@ -178,59 +201,95 @@ def build_background():
                                               color=ICON_ORANGE), 37)
     paste_centered(im, heart, ICON_CENTER_X_LEFT, STAT_ROW_Y_TOP)
 
-    steps = scaled_to_width(key_by_saturation(os.path.join(DESIGN_DIR, "steps-icon.png"),
-                                              color=ICON_ORANGE), 35)
-    paste_centered(im, steps, ICON_CENTER_X_RIGHT, STAT_ROW_Y_TOP)
-
     shoe, _ = mockup_icon(SHOE_BOX)
     paste_centered(im, shoe, ICON_CENTER_X_RIGHT, STAT_ROW_Y_BOTTOM)
 
     return im
 
 
-def battery_position(icon):
-    """Top-left of the battery widget -- printed for watchface/index.js."""
-    return (round(ICON_CENTER_X_LEFT - icon.width / 2),
-            round(STAT_ROW_Y_BOTTOM - icon.height / 2))
+def centered_position(icon, cx, cy):
+    """Top-left of a runtime icon widget -- printed for watchface/index.js."""
+    return (round(cx - icon.width / 2), round(cy - icon.height / 2))
 
 
-def render_preview(bg, battery, battery_pos):
-    """Composite a sample frame matching the mockup values, for icon.png /
-    preview.png. Text anchors mirror the device widgets' align settings."""
-    im = bg.copy()
-    im.alpha_composite(battery, battery_pos)
-    d = ImageDraw.Draw(im)
-
-    d.text((TIME_RIGHT_X, TIME_CENTER_Y), "10:09", font=font(TIME_FONT, TIME_TEXT_SIZE),
+def draw_time_and_date(d, time, ampm, date):
+    d.text((TIME_RIGHT_X, TIME_CENTER_Y), time, font=font(TIME_FONT, TIME_TEXT_SIZE),
            fill=WHITE, anchor="rm")
-    d.text((AMPM_X, AMPM_CENTER_Y), "AM", font=font(TIME_FONT, AMPM_TEXT_SIZE),
+    d.text((AMPM_X, AMPM_CENTER_Y), ampm, font=font(TIME_FONT, AMPM_TEXT_SIZE),
            fill=WHITE, anchor="lm")
-    d.text((CX, DATE_CENTER_Y), "FRI, SEP 24", font=font(TEXT_FONT, DATE_TEXT_SIZE),
+    d.text((CX, DATE_CENTER_Y), date, font=font(TEXT_FONT, DATE_TEXT_SIZE),
            fill=WHITE, anchor="mm")
 
+
+def draw_stats(d, stats):
     f_stat = font(TEXT_FONT, STAT_TEXT_SIZE)
-    for x, y, text in [
-        (STAT_TEXT_X_LEFT, STAT_ROW_Y_TOP, "72"),
-        (STAT_TEXT_X_RIGHT, STAT_ROW_Y_TOP, "8,125"),
-        (STAT_TEXT_X_LEFT, STAT_ROW_Y_BOTTOM, "88%"),
-        (STAT_TEXT_X_RIGHT, STAT_ROW_Y_BOTTOM, "6.45"),
-    ]:
+    for x, y, text in stats:
         d.text((x, y), text, font=f_stat, fill=WHITE, anchor="lm")
+
+
+def render_preview(bg, icons):
+    """Normal-mode sample frame with the spec's default data, for icon.png /
+    preview.png. Text anchors mirror the device widgets' align settings."""
+    im = bg.copy()
+    for icon, pos in icons:
+        im.alpha_composite(icon, pos)
+    d = ImageDraw.Draw(im)
+    draw_time_and_date(d, PREVIEW_TIME, "AM", "FRI, SEP 24")
+    draw_stats(d, [
+        (STAT_TEXT_X_LEFT, STAT_ROW_Y_TOP, PREVIEW_HEART),
+        (STAT_TEXT_X_RIGHT, STAT_ROW_Y_TOP, PREVIEW_STEPS),
+        (STAT_TEXT_X_LEFT, STAT_ROW_Y_BOTTOM, PREVIEW_POWER),
+        (STAT_TEXT_X_RIGHT, STAT_ROW_Y_BOTTOM, PREVIEW_DISTANCE),
+    ])
     return im
+
+
+def render_aod(step, step_pos, time, ampm, date, steps):
+    """AOD (screen-off) frame: black background with time, date and steps --
+    the spec's top-priority fields -- at the same positions as normal mode so
+    nothing jumps on switch."""
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 255))
+    im.alpha_composite(step, step_pos)
+    d = ImageDraw.Draw(im)
+    draw_time_and_date(d, time, ampm, date)
+    draw_stats(d, [(STAT_TEXT_X_RIGHT, STAT_ROW_Y_TOP, steps)])
+    return im
+
+
+def lit_ratio(im):
+    """Share of the round display's pixels that are visibly lit."""
+    rgb = np.array(im.convert("RGB")).astype(int)
+    ys, xs = np.mgrid[0:H, 0:W]
+    on_screen = np.hypot(xs - CX + 0.5, ys - CY + 0.5) <= 240
+    lit = rgb.max(axis=2) > 32
+    return (lit & on_screen).sum() / on_screen.sum()
 
 
 def main():
     bg = build_background()
     bg.convert("RGB").save(os.path.join(ASSET_DIR, "bg.png"))
 
-    battery, battery_charging = battery_icons()
-    battery.save(os.path.join(ASSET_DIR, "battery.png"))
-    battery_charging.save(os.path.join(ASSET_DIR, "battery_charging.png"))
-    battery_pos = battery_position(battery)
-    print("battery device pos/size", battery_pos, battery.size)
+    power, power_charging = power_icons()
+    power.save(os.path.join(ASSET_DIR, "power.png"))
+    power_charging.save(os.path.join(ASSET_DIR, "power_charging.png"))
+    power_pos = centered_position(power, ICON_CENTER_X_LEFT, STAT_ROW_Y_BOTTOM)
+    print("power device pos/size", power_pos, power.size)
 
-    preview = render_preview(bg, battery, battery_pos)
+    step = step_icon()
+    step.save(os.path.join(ASSET_DIR, "step.png"))
+    step_pos = centered_position(step, ICON_CENTER_X_RIGHT, STAT_ROW_Y_TOP)
+    print("step device pos/size", step_pos, step.size)
+
+    preview = render_preview(bg, [(power, power_pos), (step, step_pos)])
     preview.save(os.path.join(ROOT, "tools", "_preview_full.png"))
+
+    aod = render_aod(step, step_pos, PREVIEW_TIME, "AM", "FRI, SEP 24", PREVIEW_STEPS)
+    aod.save(os.path.join(ROOT, "tools", "_preview_aod.png"))
+    ratio = lit_ratio(render_aod(step, step_pos, AOD_WORST_TIME, AOD_WORST_AMPM,
+                                 AOD_WORST_DATE, AOD_WORST_STEPS))
+    print(f"AOD lit pixels, worst case: {ratio:.1%} (limit {AOD_MAX_LIT_RATIO:.0%})")
+    if ratio > AOD_MAX_LIT_RATIO:
+        raise SystemExit("AOD layout lights too many pixels -- trim AOD elements")
 
     # zeus build resizes icon.png to the device previewSize (324x324 on
     # Cheetah Pro) for the Zepp app gallery; ship it at that size already.

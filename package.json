@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tools/date-format.test.js tools/charging.test.js",
+    "test": "node --test tools/date-format.test.js tools/charging.test.js tools/number-format.test.js",
     "assets": "python3 tools/generate_assets.py"
   }
 }

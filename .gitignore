@@ -4,3 +4,4 @@ node_modules/
 tools/_preview_full.png
 .DS_Store
 tools/__pycache__/
+tools/_preview_aod.png
