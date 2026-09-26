@@ -150,7 +150,7 @@ SHOE_BOX = (528, 685, 632, 770)
 
 # Union bbox of the body/bolt in both battery design files, so the normal and
 # charging icons share one canvas and swap in place.
-BATTERY_SRC_BOX = (202, 557, 566, 844)
+BATTERY_SRC_BOX = (202, 556, 567, 844)
 
 
 def battery_icons():
