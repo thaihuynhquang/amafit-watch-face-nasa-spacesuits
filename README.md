@@ -23,7 +23,6 @@ watchface/
   charging.js             Charging-state heuristic
 assets/480x480-amazfit-cheetah-pro/
   images/                 Generated background, icons, time and stat digits
-  fonts/                  Date font shipped to the device
 design/                   Source mockups and icons
 tools/
   generate_assets.py      Builds every PNG in assets/ from design/
@@ -47,7 +46,7 @@ zeus build                # build the .zab package into dist/
 - **Layout** is measured from `design/watch-face-circle.png`. The layout constants in `tools/generate_assets.py` and `watchface/index.js` must stay in sync.
 - **Icon extraction:** the PNGs in `design/` have a checkerboard painted in rather than real transparency. `generate_assets.py` keys single-color icons out by saturation. It keys the Artemis logo and the shoe out of the mockup against the navy dial.
 - **Charging state:** Zepp OS does not expose a charging status to watchfaces. The charging icon is shown when the battery percentage rises and hidden when it falls. It appears only after the first 1% increase, and stays after unplugging at 100% until the percentage drops.
-- **Digit images, not fonts:** on the Cheetah Pro, large custom-font `TEXT` widgets rendered only partially or not at all. So time (`IMG_TIME`) and stat numbers (`TEXT_IMG`) use pre-rendered digit images, generated from Montserrat and Roboto by `generate_assets.py`. Only the date is a `TEXT` widget: it needs letters, and `IMG_WEEK` has no Vietnamese weekday set.
+- **Digit images, not fonts:** on the Cheetah Pro, large custom-font `TEXT` widgets rendered only partially or not at all. So time (`IMG_TIME`) and stat numbers (`TEXT_IMG`) use pre-rendered digit images, generated from Montserrat and Roboto by `generate_assets.py`. Only the date is a `TEXT` widget: it needs letters, and `IMG_WEEK` has no Vietnamese weekday set. It uses the system font, because with a custom font file the device dropped glyphs (`T2, 05/10` showed as `2, 0/0`).
 - **System-bound data:** following the [Zepp OS watchface samples](https://github.com/zepp-health/zeppos-samples/tree/main/watchface), time and stats are bound to system data (`IMG_TIME`, `TEXT_IMG` with `data_type`). The system updates them, including in AOD, with no sensor code or permissions. Steps therefore show without a thousands separator (`8670`), as in the spec. JS only drives the date and the charging icon, and refreshes both from a `WIDGET_DELEGATE` `resume_call`.
 - **Zepp OS specification:** the watchface follows the [watchface specification](https://docs.zepp.com/docs/watchface/specification) and the [AOD design principles](https://docs.zepp.com/docs/designs/customization/screen-off-mode/#design-principles):
   - AOD uses a pure black background. It shows only the top-priority fields (time, date, steps), at the same positions as normal mode.

@@ -18,7 +18,8 @@ transparency, so icons are keyed out here:
 Time and stat numbers ship as pre-rendered digit images (IMG_TIME / TEXT_IMG
 widgets), not TEXT with a custom font: on the Cheetah Pro, large or several
 custom-font TEXT widgets failed to render. The date stays a TEXT widget -- it
-needs letters and rendered correctly on the device.
+needs letters, so it uses the device's system font: with a custom font file
+the Cheetah Pro dropped glyphs ("T2, 05/10" showed as "2, 0/0").
 """
 import math
 import os
@@ -70,11 +71,13 @@ STAT_ROW_Y_BOTTOM = 394
 ICON_CENTER_X_LEFT = 112
 ICON_CENTER_X_RIGHT = 282
 
-# Runtime icon widgets rather than baked into bg.png: step also shows in AOD
-# (screen-off) mode, where bg.png is hidden, and power swaps between its
-# normal and charging image.
-POWER_ICON_W = 50
-STEP_ICON_W = 35
+# Every stat icon (heart, step, power, shoe) is fitted into one square box,
+# longer side = ICON_SIZE, so they read as one set on the device. Keep in
+# sync with ICON_SIZE in watchface/index.js.
+ICON_SIZE = 40
+# The heart is a solid, nearly square shape, so at the full box it looks
+# bigger than the line-drawn icons; draw it smaller to match them optically.
+HEART_ICON_SIZE = 32
 
 # Default preview data from the Zepp OS watchface specification. Stat strings
 # use TEXT_IMG syntax: "." is the widget's dot_image. The device appends a
@@ -164,6 +167,18 @@ def paste_centered(dst, icon, cx, cy):
     dst.alpha_composite(icon, (round(cx - icon.width / 2), round(cy - icon.height / 2)))
 
 
+def fit_icon(im, trim=True, size=ICON_SIZE):
+    """Scale `im` so its longer side is `size` and center it on an
+    ICON_SIZE square canvas. `trim` first crops to the visible ink."""
+    if trim:
+        im = im.crop(im.getchannel("A").point(lambda a: 255 if a > 32 else 0).getbbox())
+    scale = size / max(im.size)
+    im = resize_rgba(im, (max(1, round(im.width * scale)), max(1, round(im.height * scale))))
+    canvas = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
+    canvas.alpha_composite(im, ((ICON_SIZE - im.width) // 2, (ICON_SIZE - im.height) // 2))
+    return canvas
+
+
 def mockup_icon(box):
     """Mockup crop scaled to device size, with its device-space center."""
     icon = key_from_mockup(box)
@@ -182,19 +197,18 @@ POWER_SRC_BOX = (202, 556, 567, 844)
 
 
 def power_icons():
-    """power.png / power_charging.png on one shared canvas size."""
-    body_src_w = POWER_SRC_BOX[2] - POWER_SRC_BOX[0]
+    """power.png / power_charging.png on one shared canvas, not trimmed
+    separately so they swap in place."""
     normal = key_by_saturation(os.path.join(DESIGN_DIR, "battery-icon.png"),
                                POWER_SRC_BOX, ICON_ORANGE)
     charging = key_by_saturation(os.path.join(DESIGN_DIR, "battery-charged-icon.png"),
                                  POWER_SRC_BOX)
-    size = (POWER_ICON_W, round(normal.height * POWER_ICON_W / body_src_w))
-    return resize_rgba(normal, size), resize_rgba(charging, size)
+    return fit_icon(normal, trim=False), fit_icon(charging, trim=False)
 
 
 def step_icon():
-    return scaled_to_width(key_by_saturation(os.path.join(DESIGN_DIR, "steps-icon.png"),
-                                             color=ICON_ORANGE), STEP_ICON_W)
+    return fit_icon(key_by_saturation(os.path.join(DESIGN_DIR, "steps-icon.png"),
+                                      color=ICON_ORANGE))
 
 
 def build_background():
@@ -207,11 +221,11 @@ def build_background():
                                              color=NASA_RED), 81)
     paste_centered(im, nasa, CX, 260)
 
-    heart = scaled_to_width(key_by_saturation(os.path.join(DESIGN_DIR, "heart-icon.png"),
-                                              color=ICON_ORANGE), 37)
+    heart = fit_icon(key_by_saturation(os.path.join(DESIGN_DIR, "heart-icon.png"),
+                                       color=ICON_ORANGE), size=HEART_ICON_SIZE)
     paste_centered(im, heart, ICON_CENTER_X_LEFT, STAT_ROW_Y_TOP)
 
-    shoe, _ = mockup_icon(SHOE_BOX)
+    shoe = fit_icon(key_from_mockup(SHOE_BOX))
     paste_centered(im, shoe, ICON_CENTER_X_RIGHT, STAT_ROW_Y_BOTTOM)
 
     return im

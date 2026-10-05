@@ -9,10 +9,11 @@ const logger = log.getLogger('nasa-artemis')
 
 // Layout constants, printed by tools/generate_assets.py as
 // "watchface/index.js constants" -- re-copy them after regenerating assets.
-const POWER_X = 87
+const POWER_X = 92
 const POWER_Y = 374
-const STEP_X = 264
+const STEP_X = 262
 const STEP_Y = 300
+const ICON_SIZE = 40
 const TIME_X_12H = 40
 const TIME_X_24H = 72
 const MINUTE_OFFSET = 182
@@ -26,11 +27,11 @@ const STAT_X_LEFT = 150
 const STAT_X_RIGHT = 319
 
 // The date is the only TEXT widget: it needs letters (EN and VI weekdays,
-// which IMG_WEEK can't provide), and a small custom-font TEXT renders
-// correctly on the Cheetah Pro. Time and stats use digit images.
+// which IMG_WEEK can't provide). It uses the system font: with a custom font
+// file the Cheetah Pro dropped glyphs ("T2, 05/10" showed as "2, 0/0").
+// Time and stats use digit images.
 const DATE_CENTER_Y = 216
 const DATE_TEXT_SIZE = 34
-const DATE_FONT = 'fonts/Roboto-Medium.ttf'
 
 const img = (path) => `images/${path}`
 const digits = (folder) => Array.from({ length: 10 }, (_, i) => img(`${folder}/${i}.png`))
@@ -63,8 +64,15 @@ function statText(x, y, w, type, showLevel, extra = {}) {
   })
 }
 
-function icon(x, y, src, showLevel) {
-  return hmUI.createWidget(hmUI.widget.IMG, { x: px(x), y: px(y), src: img(src), show_level: showLevel })
+function icon(x, y, size, src, showLevel) {
+  return hmUI.createWidget(hmUI.widget.IMG, {
+    x: px(x),
+    y: px(y),
+    w: px(size),
+    h: px(size),
+    src: img(src),
+    show_level: showLevel,
+  })
 }
 
 WatchFace({
@@ -79,7 +87,7 @@ WatchFace({
 
   build() {
     logger.log('watchface on build')
-    icon(0, 0, 'bg.png', NORMAL)
+    icon(0, 0, 480, 'bg.png', NORMAL)
     this.buildTime()
     this.buildDate()
     this.buildStats()
@@ -146,7 +154,6 @@ WatchFace({
       text_style: hmUI.text_style.NONE,
       color: 0xffffff,
       text_size: px(DATE_TEXT_SIZE),
-      font: DATE_FONT,
       text: '',
       show_level: NORMAL_AND_AOD,
     })
@@ -165,9 +172,9 @@ WatchFace({
       dot_image: img('stat/dot.png'),
     })
 
-    icon(STEP_X, STEP_Y, 'icons/step.png', NORMAL_AND_AOD)
-    this.powerIcon = icon(POWER_X, POWER_Y, 'icons/power.png', NORMAL)
-    this.powerChargingIcon = icon(POWER_X, POWER_Y, 'icons/power_charging.png', NORMAL)
+    icon(STEP_X, STEP_Y, ICON_SIZE, 'icons/step.png', NORMAL_AND_AOD)
+    this.powerIcon = icon(POWER_X, POWER_Y, ICON_SIZE, 'icons/power.png', NORMAL)
+    this.powerChargingIcon = icon(POWER_X, POWER_Y, ICON_SIZE, 'icons/power_charging.png', NORMAL)
   },
 
   updateDate() {
